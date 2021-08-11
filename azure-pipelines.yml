@@ -13,7 +13,7 @@ pool:
 
 variables:
   - name: BuildParameters.RestoreBuildProjects
-    value: '**/*.Build.sln'
+    value: '**/*.sln'
   - name: BuildParameters.TestProjects
     value: '**/*Test.??proj'
   - name: BuildParameters.ProjectKey
@@ -49,12 +49,6 @@ steps:
       set-content $fileName $out
    
       write-output "##vso[task.addattachment type=Distributedtask.Core.Summary;name=Environment Variables;]$fileName"
-
-- task: FileTransform@2
-  inputs:
-    folderPath: '$(System.DefaultWorkingDirectory)'
-    jsonTargetFiles: '**/appsettings.json'
-    xmlTransformationRules: '' # disabled 
 
 - task: DotNetCoreCLI@2
   displayName: Restore
