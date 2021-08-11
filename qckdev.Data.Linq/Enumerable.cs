@@ -1,0 +1,84 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace qckdev.Data.Linq
+{
+
+    /// <summary>
+    /// Provides a set of static (Shared in Visual Basic) methods for querying data structures that implement <see cref="IEnumerable{T}"/>.
+    /// </summary>
+    public static class Enumerable
+    {
+
+        /// <summary>
+        /// Adds pagination to <see cref="IEnumerable{TSource}"/>.
+        /// </summary>
+        /// <typeparam name="TSource">Kind of <see cref="IEnumerable{TSource}"/> to process</typeparam>
+        /// <param name="query"><see cref="IEnumerable{TSource}"/> to paginate on</param>
+        /// <param name="page">From where to catch</param>
+        /// <param name="take">How much to take</param>
+        /// <returns><see cref="PagedCollection{TSource}"/></returns>
+        public static PagedCollection<TSource> GetPaged<TSource>(this IEnumerable<TSource> query, int page, int take)
+        {
+            return GetPaged(query, page, take, x => x);
+        }
+
+        /// <summary>
+        /// Adds pagination to <see cref="IEnumerable{TSource}"/>.
+        /// </summary>
+        /// <typeparam name="TSource">Kind of <see cref="IEnumerable{TSource}"/> to process</typeparam>
+        /// <param name="query"><see cref="IEnumerable{TSource}"/> to paginate on</param>
+        /// <param name="page">From where to catch</param>
+        /// <param name="take">How much to take</param>
+        /// <returns>DataCollection<T></returns>
+        public static PagedCollection<TResult> GetPaged<TSource, TResult>(this IEnumerable<TSource> query, int page, int take, Func<TSource, TResult> selector)
+        {
+            var originalPage = page;
+            page--;
+
+            if (page > 0)
+            {
+                page *= take;
+            }
+
+            var items = query.Skip(page).Take(take).Select(selector).ToArray();
+            var result = new PagedCollection<TResult>()
+            {
+                Items = items,
+                Total = items.Length,
+                CurrentPage = originalPage
+            };
+
+            if (result.Total > 0)
+            {
+                result.Pages = Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(result.Total) / take));
+            }
+
+            return result;
+        }
+
+        public static IEnumerable<TEntity> WhereFilter<TEntity>(this IEnumerable<TEntity> source, string value,
+            params Func<TEntity, object>[] predicates)
+        {
+
+            return source.Where(x =>
+            {
+                return predicates.Any(y =>
+                {
+                    var val = y(x);
+
+                    if (val is IEnumerable<string> text)
+                    {
+                        return text.Any(z => (z ?? "").Contains(value));
+                    }
+                    else
+                    {
+                        return (val?.ToString() ?? "").Contains(value);
+                    }
+                });
+            });
+        }
+
+    }
+}
