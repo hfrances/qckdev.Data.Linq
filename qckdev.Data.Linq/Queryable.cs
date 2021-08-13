@@ -13,10 +13,15 @@ namespace qckdev.Data.Linq
     public static class Queryable
     {
 
+        enum ExpressionOperator
+        {
+            And, Or
+        }
+
         /// <summary>
         /// Adds pagination to <see cref="IQueryable{TSource}"/>.
         /// </summary>
-        /// <typeparam name="TSource">Kind of IQueryable to process</typeparam>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
         /// <param name="query">IQueryable to paginate on</param>
         /// <param name="page">From where to catch</param>
         /// <param name="take">How much to take</param>
@@ -29,10 +34,12 @@ namespace qckdev.Data.Linq
         /// <summary>
         /// Adds pagination to <see cref="IQueryable{TSource}"/>.
         /// </summary>
-        /// <typeparam name="T">Kind of IQueryable to process</typeparam>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <typeparam name="TResult">Kind of IEnumerable to return</typeparam>
         /// <param name="query">IQueryable to paginate on</param>
         /// <param name="page">From where to catch</param>
         /// <param name="take">How much to take</param>
+        /// <param name="selector">A transform function to apply to each element.</param>
         /// <returns><see cref="PagedCollection{TSource}"/></returns>
         public static PagedCollection<TResult> GetPaged<TSource, TResult>(this IQueryable<TSource> query, int page, int take, Func<TSource, TResult> selector)
         {
@@ -44,68 +51,29 @@ namespace qckdev.Data.Linq
                 page *= take;
             }
 
-            var result = new PagedCollection<TResult>
-            {
-                Items = query.Skip(page).Take(take).Select(selector),
-                Total = query.Count(),
-                CurrentPage = originalPage
-            };
-
-            if (result.Total > 0)
-            {
-                result.Pages = Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(result.Total) / take));
-            }
+            var queryCount = query.Count();
+            var result = new PagedCollection<TResult>(
+                current: originalPage,
+                pages: queryCount == 0 ? 0 : Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(queryCount) / take)),
+                items: query.Skip(page).Take(take).Select(selector),
+                total: queryCount
+            );
             return result;
         }
 
         /// <summary>
-        /// Adds pagination to <see cref="IQueryable{TSource}"/>.
+        /// Filters a sequence of items which contains some of the values specified in the predicates.
         /// </summary>
-        /// <typeparam name="TSource">Kind of IQueryable to process</typeparam>
-        /// <param name="query">IQueryable to paginate on</param>
-        /// <param name="page">From where to catch</param>
-        /// <param name="take">How much to take</param>
-        /// <returns><see cref="PagedCollection{TSource}"/></returns>
-        public static async Task<PagedCollection<TSource>> GetPagedAsync<TSource>(this IQueryable<TSource> query, int page, int take)
-        {
-            return await GetPagedAsync(query, page, take, x => x);
-        }
-
-        /// <summary>
-        /// Adds pagination to <see cref="IQueryable{TSource}"/>.
-        /// </summary>
-        /// <typeparam name="T">Kind of IQueryable to process</typeparam>
-        /// <param name="query">IQueryable to paginate on</param>
-        /// <param name="page">From where to catch</param>
-        /// <param name="take">How much to take</param>
-        /// <returns><see cref="PagedCollection{TSource}"/></returns>
-        public static async Task<PagedCollection<TResult>> GetPagedAsync<TSource, TResult>(this IQueryable<TSource> query, int page, int take, Func<TSource, TResult> selector)
-        {
-            var originalPage = page;
-
-            page--;
-            if (page > 0)
-            {
-                page *= take;
-            }
-
-            var result = new PagedCollection<TResult>
-            {
-                Items = (await Task.FromResult(query.Skip(page).Take(take).ToArray())).Select(selector),
-                Total = await Task.FromResult(query.Count()),
-                CurrentPage = originalPage
-            };
-
-            if (result.Total > 0)
-            {
-                result.Pages = Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(result.Total) / take));
-            }
-            return result;
-        }
-
-
-        public static IQueryable<TEntity> WhereString<TEntity>(this IQueryable<TEntity> source, string value,
-            params Expression<Func<TEntity, object>>[] predicates)
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <param name="collection">An <see cref="IQueryable{TSource}"/>.</param>
+        /// <param name="value">The string value to search.</param>
+        /// <param name="predicates">A list of functions to test each element for a condition.</param>
+        /// <returns>
+        /// An <see cref="IQueryable{TSource}"/> that contains elements from the input sequence 
+        /// that contains contains some of the values specified in the predicates.
+        /// </returns>
+        public static IQueryable<TSource> WhereString<TSource>(this IQueryable<TSource> collection, string value,
+            params Expression<Func<TSource, object>>[] predicates)
         {
             var valueAux = value ?? "";
             var contains = typeof(string).GetMethod(nameof(string.Contains), new Type[] { typeof(string) });
@@ -116,16 +84,17 @@ namespace qckdev.Data.Linq
             var anyGen = any.MakeGenericMethod(typeof(string));
             Expression<Func<string, bool>> anyExpr = (p => p.Contains(valueAux));
 
-            var parameterExpr = Expression.Parameter(typeof(TEntity), "p");
+            var parameterExpr = Expression.Parameter(typeof(TSource), "p");
             var valueExpr = Expression.Constant(valueAux);
             var completeExpression = (Expression)null;
             var etor = predicates.AsEnumerable().GetEnumerator();
 
             while (etor.MoveNext())
             {
+                var parameter = etor.Current.Parameters[0];
                 var expression = etor.Current.Body;
 
-                expression = expression.ReplaceParameter(parameterExpr);
+                expression = expression.ReplaceParameter(parameter, parameterExpr);
 
                 // Call to "Contains" function and concat with other conditions using "OrElse" method.
                 if (typeof(IEnumerable<string>).IsAssignableFrom(expression.Type))
@@ -149,40 +118,130 @@ namespace qckdev.Data.Linq
                 }
             }
 
-            var lambda = Expression.Lambda<Func<TEntity, bool>>(completeExpression, false, parameterExpr);
-            return source.Where(lambda);
+            var lambda = Expression.Lambda<Func<TSource, bool>>(completeExpression, false, parameterExpr);
+            return collection.Where(lambda);
         }
 
-        public static IQueryable<TEntity> WhereIn<TEntity, TValue>(this IQueryable<TEntity> source, IEnumerable<TValue> values, Expression<Func<TEntity, TValue>> predicate)
+        /// <summary>
+        /// Filters a sequence of items which contains some of the specified values.
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <typeparam name="TValue">The type of the values to compare</typeparam>
+        /// <param name="collection">An <see cref="IQueryable{TSource}"/>.</param>
+        /// <param name="values">A list of <typeparamref name="TValue"/> in which search the value.</param>
+        /// <param name="predicate">A function to test each element for a condition.</param>
+        /// <returns>
+        /// An <see cref="IQueryable{TSource}"/> that contains elements from the input sequence that contains some of the specified values.
+        /// </returns>
+        public static IQueryable<TSource> WhereIn<TSource, TValue>(this IQueryable<TSource> collection, IEnumerable<TValue> values, Expression<Func<TSource, TValue>> predicate)
         {
-            return WhereIn(source, values, predicate, typeof(System.Linq.Enumerable), nameof(System.Linq.Enumerable.Contains));
+            return WhereIn(collection, values, predicate, typeof(System.Linq.Enumerable), nameof(System.Linq.Enumerable.Contains));
         }
 
-        public static IQueryable<TEntity> WhereIn<TEntity, TValue>(this IQueryable<TEntity> source, IQueryable<TValue> values, Expression<Func<TEntity, TValue>> predicate)
+        private static IQueryable<TSource> WhereIn<TSource, TValue>(this IQueryable<TSource> collection, IEnumerable<TValue> values, Expression<Func<TSource, TValue>> predicate, Type type, string methodName)
         {
-            return WhereIn(source, values, predicate, typeof(System.Linq.Queryable), nameof(System.Linq.Queryable.Contains));
-        }
-
-        private static IQueryable<TEntity> WhereIn<TEntity, TValue>(this IQueryable<TEntity> source, IEnumerable<TValue> values, Expression<Func<TEntity, TValue>> predicate, Type type, string containsName)
-        {
-            Expression<Func<TEntity, bool>> emptyExpression = (p => values == null || !values.Any());
+            Expression<Func<TSource, bool>> emptyExpression = (p => values == null || !values.Any());
             Expression definitiveExpression;
-            var parameterExpr = Expression.Parameter(typeof(TEntity), "p");
+            var parameterExpr = Expression.Parameter(typeof(TSource), "p");
 
             definitiveExpression = emptyExpression.Body;
             if (values != null)
             {
-                var contains = type.GetMethod(containsName, typeof(TValue), values.GetType(), typeof(TValue));
-                var valueExpr = Expression.Constant(values);
-                var predicateExpression = predicate.Body.ReplaceParameter(parameterExpr);
+                var method = type.GetMethod(methodName, typeof(TValue), values.GetType(), typeof(TValue));
 
-                predicateExpression = Expression.Call(null, contains, valueExpr, predicateExpression);
-                definitiveExpression = Expression.OrElse(definitiveExpression, predicateExpression);
+                if (method == null)
+                {
+                    throw new ArgumentException($"Method not found '{methodName}' in type '{type.FullName}' with necessary parameters.");
+                }
+                else
+                {
+                    var valueExpr = Expression.Constant(values);
+                    var predicateExpression = predicate.Body.ReplaceParameter(predicate.Parameters[0], parameterExpr);
+
+                    predicateExpression = Expression.Call(null, method, valueExpr, predicateExpression);
+                    definitiveExpression = Expression.OrElse(definitiveExpression, predicateExpression);
+                }
             }
 
-            var lambda = Expression.Lambda<Func<TEntity, bool>>(definitiveExpression, false, parameterExpr);
-            return source.Where(lambda);
+            var lambda = Expression.Lambda<Func<TSource, bool>>(definitiveExpression, false, parameterExpr);
+            return collection.Where(lambda);
         }
+
+        /// <summary>
+        /// Filters a sequence of values which satisfy all <paramref name="predicates"/> (AND operator).
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <param name="collection">An <see cref="IQueryable{TSource}"/>.</param>
+        /// <param name="predicates">A list of functions to test each element for a condition.</param>
+        /// <returns>
+        /// An <see cref="IQueryable{TSource}"/> that contains elements from the input sequence that satisfy the condition specified by the predicates.
+        /// </returns>
+        public static IQueryable<TSource> WhereAnd<TSource>(this IQueryable<TSource> collection, params Expression<Func<TSource, bool>>[] predicates)
+        {
+            return Where(collection, ExpressionOperator.And, predicates);
+        }
+
+        /// <summary>
+        /// Filters a sequence of values which satisfy one of the <paramref name="predicates"/> (OR operator).
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <param name="collection">An <see cref="IQueryable{TSource}"/>.</param>
+        /// <param name="predicates">A list of functions to test each element for a condition.</param>
+        /// <returns>
+        /// An <see cref="IQueryable{TSource}"/> that contains elements from the input sequence that satisfy the condition specified by the predicates.
+        /// </returns>
+        public static IQueryable<TSource> WhereOr<TSource>(this IQueryable<TSource> collection, params Expression<Func<TSource, bool>>[] predicates)
+        {
+            return Where(collection, ExpressionOperator.Or, predicates);
+        }
+
+        private static IQueryable<TSource> Where<TSource>(IQueryable<TSource> collection, ExpressionOperator @operator, params Expression<Func<TSource, bool>>[] predicates)
+        {
+            IQueryable<TSource> rdo;
+            var count = predicates.Length;
+
+            switch (count)
+            {
+                case 0:
+                    rdo = collection;
+                    break;
+
+                case 1:
+                    rdo = collection.Where(predicates[0]);
+                    break;
+
+                default:
+                    var parameter = Expression.Parameter(typeof(TSource), "x");
+                    Expression finalPredicate = null;
+
+                    foreach (var predicate in predicates)
+                    {
+                        var tmp = predicate.Body.ReplaceParameter(predicate.Parameters[0], parameter);
+                        if (finalPredicate == null)
+                        {
+                            finalPredicate = tmp;
+                        }
+                        else
+                        {
+                            switch (@operator)
+                            {
+                                case ExpressionOperator.And:
+                                    finalPredicate = Expression.AndAlso(finalPredicate, tmp);
+                                    break;
+                                case ExpressionOperator.Or:
+                                    finalPredicate = Expression.OrElse(finalPredicate, tmp);
+                                    break;
+                                default:
+                                    throw new ArgumentException($"Invalid operator {@operator}", nameof(@operator));
+                            }
+                        }
+                    }
+                    rdo = collection.Where(Expression.Lambda<Func<TSource, bool>>(finalPredicate, parameter));
+                    break;
+            }
+            return rdo;
+        }
+
 
     }
 

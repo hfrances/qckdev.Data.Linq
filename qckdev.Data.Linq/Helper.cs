@@ -10,79 +10,9 @@ namespace qckdev.Data.Linq
     static class Helper
     {
 
-        public static Expression ReplaceParameter(this Expression expression, ParameterExpression newParameterExpression)
+        public static bool InternalEquals<TSource>(TSource x, TSource y, IEqualityComparer<TSource> comparer) where TSource : IEqualityComparer<TSource>
         {
-            var expressionList = new List<Expression>();
-            var expressionPart = expression;
-
-            // Get expression list.
-            do
-            {
-                if (expressionPart is MemberExpression memberExpression)
-                {
-                    expressionList.Insert(0, memberExpression);
-                    expressionPart = memberExpression.Expression;
-                }
-                else if (expressionPart is MethodCallExpression methodCallExpression)
-                {
-                    expressionList.Insert(0, methodCallExpression);
-                    expressionPart = methodCallExpression.Object;
-                }
-                else if (expressionPart is ParameterExpression _)
-                {
-                    expressionList.Insert(0, newParameterExpression);
-                    expressionPart = null;
-                }
-                else if (expressionPart is LambdaExpression lambdaExpression)
-                {
-                    expressionList.Insert(0, lambdaExpression);
-                    expressionPart = null;
-                }
-                else if (expressionPart is UnaryExpression unaryExpresion)
-                {
-                    expressionList.Insert(0, unaryExpresion);
-                    expressionPart = unaryExpresion.Operand;
-                }
-                else
-                {
-                    throw new NotSupportedException($"WhereAny {expressionPart}");
-                }
-            } while (expressionPart != null);
-
-
-            // Build expression list with the new parameter expression.
-            expressionPart = null;
-            foreach (var subexpression in expressionList)
-            {
-                if (subexpression is MemberExpression memberExpr)
-                {
-                    expressionPart = Expression.MakeMemberAccess(expressionPart, memberExpr.Member);
-                }
-                else if (subexpression is MethodCallExpression methodExpr)
-                {
-                    var arguments = methodExpr.Arguments.Select(x =>
-                        x.ReplaceParameter(newParameterExpression)
-                    );
-                    expressionPart = Expression.Call(expressionPart, methodExpr.Method, arguments);
-                }
-                else if (subexpression is ParameterExpression parameterExpr)
-                {
-                    expressionPart = parameterExpr;
-                }
-                else if (subexpression is LambdaExpression lambdaExpression)
-                {
-                    expressionPart = lambdaExpression;
-                }
-                else if (subexpression is UnaryExpression unaryExpression)
-                {
-                    expressionPart = Expression.Convert(expressionPart, unaryExpression.Type);
-                }
-                else
-                {
-                    throw new NotSupportedException($"WhereAny {expressionPart}");
-                }
-            }
-            return expressionPart;
+            return comparer.Equals(x, y);
         }
 
         public static MethodInfo GetMethod(this Type type, string name, params Type[] types)
@@ -182,6 +112,101 @@ namespace qckdev.Data.Linq
                 Method = method,
                 EqualityLevel = equalityLevel
             };
+        }
+
+
+        [Obsolete("Use ReplaceParameter", true)]
+        public static Expression ReplaceParameterOld(this Expression expression, ParameterExpression newParameterExpression)
+        {
+            var expressionList = new List<Expression>();
+            var expressionPart = expression;
+
+            // Get expression list.
+            do
+            {
+                if (expressionPart is MemberExpression memberExpression)
+                {
+                    expressionList.Insert(0, memberExpression);
+                    expressionPart = memberExpression.Expression;
+                }
+                else if (expressionPart is MethodCallExpression methodCallExpression)
+                {
+                    expressionList.Insert(0, methodCallExpression);
+                    expressionPart = methodCallExpression.Object;
+                }
+                else if (expressionPart is ParameterExpression _)
+                {
+                    expressionList.Insert(0, newParameterExpression);
+                    expressionPart = null;
+                }
+                else if (expressionPart is LambdaExpression lambdaExpression)
+                {
+                    expressionList.Insert(0, lambdaExpression);
+                    expressionPart = null;
+                }
+                else if (expressionPart is UnaryExpression unaryExpresion)
+                {
+                    expressionList.Insert(0, unaryExpresion);
+                    expressionPart = unaryExpresion.Operand;
+                }
+                else
+                {
+                    throw new NotSupportedException($"WhereAny {expressionPart}");
+                }
+            } while (expressionPart != null);
+
+
+            // Build expression list with the new parameter expression.
+            expressionPart = null;
+            foreach (var subexpression in expressionList)
+            {
+                if (subexpression is MemberExpression memberExpr)
+                {
+                    expressionPart = Expression.MakeMemberAccess(expressionPart, memberExpr.Member);
+                }
+                else if (subexpression is MethodCallExpression methodExpr)
+                {
+                    var arguments = methodExpr.Arguments.Select(x =>
+                        x.ReplaceParameterOld(newParameterExpression)
+                    );
+                    expressionPart = Expression.Call(expressionPart, methodExpr.Method, arguments);
+                }
+                else if (subexpression is ParameterExpression parameterExpr)
+                {
+                    expressionPart = parameterExpr;
+                }
+                else if (subexpression is LambdaExpression lambdaExpression)
+                {
+                    expressionPart = lambdaExpression;
+                }
+                else if (subexpression is UnaryExpression unaryExpression)
+                {
+                    expressionPart = Expression.Convert(expressionPart, unaryExpression.Type);
+                }
+                else
+                {
+                    throw new NotSupportedException($"WhereAny {expressionPart}");
+                }
+            }
+            return expressionPart;
+        }
+
+        /// <remarks>
+        /// https://stackoverflow.com/questions/36650934/combine-two-lambda-expressions-with-inner-expression/36651409#36651409
+        /// </remarks>
+        public static Expression ReplaceParameter(this Expression expression, ParameterExpression source, Expression target)
+        {
+            return new ParameterReplacer { Source = source, Target = target }.Visit(expression);
+        }
+
+        class ParameterReplacer : ExpressionVisitor
+        {
+            public ParameterExpression Source;
+            public Expression Target;
+            protected override Expression VisitParameter(ParameterExpression node)
+            {
+                return node == Source ? Target : base.VisitParameter(node);
+            }
         }
 
     }

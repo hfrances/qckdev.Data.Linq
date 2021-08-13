@@ -16,11 +16,12 @@ namespace qckdev.Data.Linq.Test
         public void TestDbContext()
         {
             using var context = Helpers.CreateDbContext<TestDbContext>(
-                builder => builder.UseInMemoryDatabase($"memory{Guid.NewGuid()}")
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
             );
             var headerId = Guid.NewGuid();
             int rowcount;
 
+            context.Database.EnsureCreated();
             context.TestHeaders.Add(new Entities.TestHeader()
             {
                 TestHeaderId = headerId,
@@ -42,9 +43,10 @@ namespace qckdev.Data.Linq.Test
         public void TestWhereString()
         {
             using var context = Helpers.CreateDbContext<TestDbContext>(
-                builder => builder.UseInMemoryDatabase($"memory{Guid.NewGuid()}")
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
             );
 
+            context.Database.EnsureCreated();
             context.TestHeaders.AddRange(Helpers.GetSampleData());
             context.SaveChanges();
 
@@ -62,13 +64,14 @@ namespace qckdev.Data.Linq.Test
         /// Checks if <see cref="Queryable.WhereIn"/> works proerly.
         /// </summary>
         [TestMethod]
-        public void TestWhereIn_Enumerable()
+        public void TestWhereIn()
         {
             var descriptions = new[] { "Line A", "Line X" };
             using var context = Helpers.CreateDbContext<TestDbContext>(
-                builder => builder.UseInMemoryDatabase($"memory{Guid.NewGuid()}")
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
             );
 
+            context.Database.EnsureCreated();
             context.TestHeaders.AddRange(Helpers.GetSampleData());
             context.SaveChanges();
 
@@ -80,22 +83,51 @@ namespace qckdev.Data.Linq.Test
         }
 
         /// <summary>
-        /// Checks if <see cref="Queryable.WhereIn{TEntity, TValue}(IQueryable{TEntity}, IQueryable{TValue}, System.Linq.Expressions.Expression{Func{TEntity, TValue}})"/> works properly.
+        /// Checks if <see cref="Queryable.WhereIn"/> works proerly.
         /// </summary>
         [TestMethod]
-        public void TestWhereIn_Queryable()
+        public void TestWhereAnd()
         {
-            //using var context = Helpers.CreateDbContext<TestDbContext>(
-            //    builder => builder.UseInMemoryDatabase($"memory{Guid.NewGuid()}")
-            //);
+            using var context = Helpers.CreateDbContext<TestDbContext>(
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
+            );
 
-            //context.TestHeaders.AddRange(Helpers.GetSampleData());
-            //context.SaveChanges();
+            context.Database.EnsureCreated();
+            context.TestHeaders.AddRange(Helpers.GetSampleData());
+            context.SaveChanges();
 
-            //var lineIds = context.TestLines.Where(x => !x.Disabled).Select(x => x.TestLineId);
-            //var rdo = context.TestLines.WhereIn(lineIds, x => x.TestLineId);
-            //Assert.AreEqual(5, rdo.Count());
-            Assert.Inconclusive("TODO");
+            var rdo =
+                context.TestHeaders
+                    .Include(x => x.Lines)
+                    .WhereAnd(
+                        x => x.Name == "Hello world", 
+                        x => x.Lines.Any(y => y.Description == "First line")
+                    );
+            Assert.AreEqual(1, rdo.Count());
+        }
+
+        /// <summary>
+        /// Checks if <see cref="Queryable.WhereIn"/> works proerly.
+        /// </summary>
+        [TestMethod]
+        public void TestWhereOr()
+        {
+            using var context = Helpers.CreateDbContext<TestDbContext>(
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
+            );
+
+            context.Database.EnsureCreated();
+            context.TestHeaders.AddRange(Helpers.GetSampleData());
+            context.SaveChanges();
+
+            var rdo =
+                context.TestHeaders
+                    .Include(x => x.Lines)
+                    .WhereOr(
+                        x => x.Name == "Hello world",
+                        x => x.Lines.Any(y => y.Description == "Line X")
+                    );
+            Assert.AreEqual(2, rdo.Count());
         }
 
         /// <summary>
@@ -105,9 +137,10 @@ namespace qckdev.Data.Linq.Test
         public void TestPagination()
         {
             using var context = Helpers.CreateDbContext<TestDbContext>(
-                builder => builder.UseInMemoryDatabase($"memory{Guid.NewGuid()}")
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
             );
 
+            context.Database.EnsureCreated();
             for (int i = 0; i < 100; i++)
             {
                 context.Add(new Entities.TestHeader
@@ -118,10 +151,9 @@ namespace qckdev.Data.Linq.Test
             context.SaveChanges();
 
             var rdo = context.TestHeaders.GetPaged(1, 5);
-
             Assert.AreEqual(
-                new { CurrentPage = 1, Pages = 20, Total = 100, Count = 5 },
-                new { rdo.CurrentPage, rdo.Pages, rdo.Total, Count = rdo.Items.Count() }
+                new { Current = 1, Pages = 20, Total = 100, Count = 5 },
+                new { rdo.Current, rdo.Pages, rdo.Total, Count = rdo.Items.Count() }
             );
         }
 

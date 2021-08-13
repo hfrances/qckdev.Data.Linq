@@ -6,7 +6,7 @@ namespace qckdev.Data.Linq
     public interface IDataCollection<TSource>
     {
 
-        IEnumerable<TSource> Items { get; set; }
+        IEnumerable<TSource> Items { get; }
 
     }
 }

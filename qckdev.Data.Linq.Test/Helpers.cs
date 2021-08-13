@@ -1,17 +1,42 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace qckdev.Data.Linq.Test
 {
     static class Helpers
     {
 
+        // https://www.entityframeworktutorial.net/efcore/logging-in-entityframework-core.aspx
+        static readonly ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder
+                .AddConsole()
+                .AddDebug()
+                .AddFilter((category, level) =>
+                {
+                    return 
+                        category.Equals("Microsoft.EntityFrameworkCore.Database.Command") && 
+                        level >= LogLevel.Information;
+                });
+        });
+
         public static TDbContext CreateDbContext<TDbContext>(Func<DbContextOptionsBuilder<TDbContext>, DbContextOptionsBuilder<TDbContext>> builder) where TDbContext : DbContext
         {
             var optionsBuilder = new DbContextOptionsBuilder<TDbContext>();
-            var options = builder(optionsBuilder).Options;
+            DbContextOptions<TDbContext> options;
 
+            loggerFactory.CreateLogger<TDbContext>().LogInformation("Creating DbContext...");
+            optionsBuilder =
+                optionsBuilder
+                    .EnableSensitiveDataLogging()
+                    .UseLoggerFactory(loggerFactory);
+            optionsBuilder = builder(optionsBuilder);
+            options = optionsBuilder.Options;
             return (TDbContext)Activator.CreateInstance(typeof(TDbContext), options);
         }
 

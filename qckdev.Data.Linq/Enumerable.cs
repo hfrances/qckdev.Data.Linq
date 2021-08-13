@@ -31,7 +31,7 @@ namespace qckdev.Data.Linq
         /// <param name="query"><see cref="IEnumerable{TSource}"/> to paginate on</param>
         /// <param name="page">From where to catch</param>
         /// <param name="take">How much to take</param>
-        /// <returns>DataCollection<T></returns>
+        /// <returns>DataCollection</returns>
         public static PagedCollection<TResult> GetPaged<TSource, TResult>(this IEnumerable<TSource> query, int page, int take, Func<TSource, TResult> selector)
         {
             var originalPage = page;
@@ -42,18 +42,13 @@ namespace qckdev.Data.Linq
                 page *= take;
             }
 
-            var items = query.Skip(page).Take(take).Select(selector).ToArray();
-            var result = new PagedCollection<TResult>()
-            {
-                Items = items,
-                Total = items.Length,
-                CurrentPage = originalPage
-            };
-
-            if (result.Total > 0)
-            {
-                result.Pages = Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(result.Total) / take));
-            }
+            var queryCount = query.Count();
+            var result = new PagedCollection<TResult>(
+                current: originalPage,
+                pages: queryCount == 0 ? 0 : Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(queryCount) / take)),
+                items: query.Skip(page).Take(take).Select(selector),
+                total: queryCount
+            );
 
             return result;
         }
