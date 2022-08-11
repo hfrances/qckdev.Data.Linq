@@ -43,19 +43,19 @@ namespace qckdev.Data.Linq
         /// <returns><see cref="PagedCollection{TSource}"/></returns>
         public static PagedCollection<TResult> GetPaged<TSource, TResult>(this IQueryable<TSource> query, int page, int take, Func<TSource, TResult> selector)
         {
-            var originalPage = page;
+            var skip = page;
 
-            page--;
-            if (page > 0)
+            skip--;
+            if (skip > 0)
             {
-                page *= take;
+                skip *= take;
             }
 
             var queryCount = query.Count();
             var result = new PagedCollection<TResult>(
-                current: originalPage,
+                current: page,
                 pages: queryCount == 0 ? 0 : Convert.ToInt32(Math.Ceiling(Convert.ToDecimal(queryCount) / take)),
-                items: query.Skip(page).Take(take).Select(selector),
+                items: query.Skip(skip).Take(take).Select(selector),
                 total: queryCount
             );
             return result;

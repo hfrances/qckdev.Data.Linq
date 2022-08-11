@@ -25,6 +25,11 @@ namespace qckdev.Data.Linq.Test
                 });
         });
 
+        public static EnumerableComparable<TEntity> ToComparable<TEntity>(this IEnumerable<TEntity> collection)
+        {
+            return new EnumerableComparable<TEntity>(collection);
+        }
+
         public static TDbContext CreateDbContext<TDbContext>(Func<DbContextOptionsBuilder<TDbContext>, DbContextOptionsBuilder<TDbContext>> builder) where TDbContext : DbContext
         {
             var optionsBuilder = new DbContextOptionsBuilder<TDbContext>();

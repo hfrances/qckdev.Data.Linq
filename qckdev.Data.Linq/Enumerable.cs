@@ -28,9 +28,11 @@ namespace qckdev.Data.Linq
         /// Adds pagination to <see cref="IEnumerable{TSource}"/>.
         /// </summary>
         /// <typeparam name="TSource">Kind of <see cref="IEnumerable{TSource}"/> to process</typeparam>
+        /// <typeparam name="TResult">Kind of IEnumerable to return</typeparam>
         /// <param name="query"><see cref="IEnumerable{TSource}"/> to paginate on</param>
         /// <param name="page">From where to catch</param>
         /// <param name="take">How much to take</param>
+        /// <param name="selector">A transform function to apply to each element.</param>
         /// <returns>DataCollection</returns>
         public static PagedCollection<TResult> GetPaged<TSource, TResult>(this IEnumerable<TSource> query, int page, int take, Func<TSource, TResult> selector)
         {
@@ -53,11 +55,22 @@ namespace qckdev.Data.Linq
             return result;
         }
 
-        public static IEnumerable<TEntity> WhereFilter<TEntity>(this IEnumerable<TEntity> source, string value,
-            params Func<TEntity, object>[] predicates)
+        /// <summary>
+        /// Filters a sequence of items which contains some of the values specified in the predicates.
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <param name="collection">An <see cref="IEnumerable{TSource}"/>.</param>
+        /// <param name="value">The string value to search.</param>
+        /// <param name="predicates">A list of functions to test each element for a condition.</param>
+        /// <returns>
+        /// An <see cref="IEnumerable{TSource}"/> that contains elements from the input sequence 
+        /// that contains contains some of the values specified in the predicates.
+        /// </returns>
+        public static IEnumerable<TSource> WhereString<TSource>(this IEnumerable<TSource> collection, string value,
+            params Func<TSource, object>[] predicates)
         {
 
-            return source.Where(x =>
+            return collection.Where(x =>
             {
                 return predicates.Any(y =>
                 {

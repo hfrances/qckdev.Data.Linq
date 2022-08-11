@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace qckdev.Data.Linq.Test
 {
@@ -100,7 +101,7 @@ namespace qckdev.Data.Linq.Test
                 context.TestHeaders
                     .Include(x => x.Lines)
                     .WhereAnd(
-                        x => x.Name == "Hello world", 
+                        x => x.Name == "Hello world",
                         x => x.Lines.Any(y => y.Description == "First line")
                     );
             Assert.AreEqual(1, rdo.Count());
@@ -131,10 +132,58 @@ namespace qckdev.Data.Linq.Test
         }
 
         /// <summary>
+        /// Checks if <see cref="Queryable.WhereIn"/> works proerly.
+        /// </summary>
+        [TestMethod]
+        public void TestWhereOr_Empty()
+        {
+            using var context = Helpers.CreateDbContext<TestDbContext>(
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
+            );
+
+            context.Database.EnsureCreated();
+            context.TestHeaders.AddRange(Helpers.GetSampleData());
+            context.SaveChanges();
+
+            var rdo =
+                context.TestHeaders
+                    .Include(x => x.Lines)
+                    .WhereOr();
+            Assert.AreEqual(context.TestHeaders.Count(), rdo.Count());
+        }
+
+        /// <summary>
+        /// Checks if <see cref="Queryable.WhereIn"/> works proerly.
+        /// </summary>
+        [TestMethod]
+        public void TestWhereOr_One()
+        {
+            using var context = Helpers.CreateDbContext<TestDbContext>(
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
+            );
+
+            context.Database.EnsureCreated();
+            context.TestHeaders.AddRange(Helpers.GetSampleData());
+            context.SaveChanges();
+
+            var rdo =
+                context.TestHeaders
+                    .Include(x => x.Lines)
+                    .WhereOr(x => x.Name == "Hello world");
+            Assert.AreEqual(1, rdo.Count());
+        }
+
+        /// <summary>
         /// Checks if <see cref="Queryable.GetPaged"/> works properly.
         /// </summary>
         [TestMethod]
-        public void TestPagination()
+        [DataRow(0)]
+        [DataRow(1)] 
+        [DataRow(2)]
+        [DataRow(5)]
+        [DataRow(20)]
+        [DataRow(21)]
+        public void TestPagination(int page)
         {
             using var context = Helpers.CreateDbContext<TestDbContext>(
                 builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
@@ -145,15 +194,37 @@ namespace qckdev.Data.Linq.Test
             {
                 context.Add(new Entities.TestHeader
                 {
-                    Name = $"Header number {i}"
+                    Name = $"Header number {i:000}"
                 });
             }
             context.SaveChanges();
 
-            var rdo = context.TestHeaders.GetPaged(1, 5);
+            var rdo = context.TestHeaders.GetPaged(page, 5);
+            var expected = context.TestHeaders.Skip((page-1) * 5).Take(5);
             Assert.AreEqual(
-                new { Current = 1, Pages = 20, Total = 100, Count = 5 },
-                new { rdo.Current, rdo.Pages, rdo.Total, Count = rdo.Items.Count() }
+                new { Current = page, Pages = 20, Total = 100, Items = expected.ToComparable() },
+                new { rdo.Current, rdo.Pages, rdo.Total, Items = rdo.Items.ToComparable() }
+            );
+        }
+
+        /// <summary>
+        /// Checks if <see cref="Queryable.GetPaged"/> works properly.
+        /// </summary>
+        [TestMethod]
+        public void TestPagination_No_Results()
+        {
+            using var context = Helpers.CreateDbContext<TestDbContext>(
+                builder => builder.UseSqlite($"Data Source={Guid.NewGuid()}.db")
+            );
+
+            context.Database.EnsureCreated();
+            context.SaveChanges();
+
+            var rdo = context.TestHeaders.GetPaged(1, 5);
+            var expected = context.TestHeaders.Skip(5).Take(5);
+            Assert.AreEqual(
+                new { Current = 1, Pages = 0, Total = 0, Items = expected.ToComparable() },
+                new { rdo.Current, rdo.Pages, rdo.Total, Items = rdo.Items.ToComparable() }
             );
         }
 
