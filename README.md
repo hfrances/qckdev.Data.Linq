@@ -6,6 +6,8 @@
 
 # qckdev.Data.Linq
 
+Contains tools for working with IEnumerable and IQueryable objects.
+
 ```cs
 using System;	
 using System.Collections.Generic;
