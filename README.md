@@ -1,7 +1,7 @@
 [![NuGet Version](https://img.shields.io/nuget/v/qckdev.Data.Linq.svg)](https://www.nuget.org/packages/qckdev.Data.Linq)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=qckdev.Data.Linq&metric=alert_status)](https://sonarcloud.io/dashboard?id=qckdev.Data.Linq)
 [![Code Coverage](https://sonarcloud.io/api/project_badges/measure?project=qckdev.Data.Linq&metric=coverage)](https://sonarcloud.io/dashboard?id=qckdev.Data.Linq)
-![Azure Pipelines Status](https://hfrances.visualstudio.com/qckdev/_apis/build/status/qckdev.Data.Linq?branchName=main)
+![Azure Pipelines Status](https://hfrances.visualstudio.com/qckdev/_apis/build/status/qckdev.Data.Linq?branchName=master)
 
 
 # qckdev.Data.Linq
