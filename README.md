@@ -8,6 +8,14 @@
 
 Contains tools for working with IEnumerable and IQueryable objects.
 
+## 🛠️ Installation
+
+```bash
+dotnet add package qckdev.Data.Linq
+```
+
+## ⚡ Quick Start
+
 ```cs
 using System;	
 using System.Collections.Generic;
